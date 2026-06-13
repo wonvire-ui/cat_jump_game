@@ -616,7 +616,12 @@ function openRankPanel(currentGameScore) {
   renderRankList(currentGameScore);
   document.getElementById('rankPanel').style.display = 'flex';
 }
-function closeRankPanel() { document.getElementById('rankPanel').style.display = 'none'; }
+function closeRankPanel() {
+  document.getElementById('rankPanel').style.display = 'none';
+  if (state === 'dead') {
+    document.getElementById('endScreen').style.display = 'flex';
+  }
+}
 
 function openRankFromEnd() {
   document.getElementById('endScreen').style.display = 'none';
