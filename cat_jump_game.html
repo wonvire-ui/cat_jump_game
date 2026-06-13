@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>小猫跳一跳</title>
+<style>
+  * { margin:0; padding:0; box-sizing: border-box; }
+  body {
+    background: linear-gradient(180deg, #a8edea 0%, #fed6e3 100%);
+    overflow: hidden;
+    width: 100vw; height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: 'Arial Rounded MT Bold', 'Arial', sans-serif;
+    user-select: none; -webkit-user-select: none;
+  }
+  #hud {
+    position: fixed; top:0; left:0; right:0; z-index:100;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 24px;
+    background: rgba(255,255,255,0.25);
+    backdrop-filter: blur(8px);
+  }
+  #score-display { font-size:28px; font-weight:bold; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,0.18); letter-spacing:2px; }
+  #best-display { font-size:15px; color:rgba(255,255,255,0.9); text-shadow:0 1px 4px rgba(0,0,0,0.15); }
+  #hint { font-size:13px; color:rgba(255,255,255,0.85); }
+  #hud-right { display:flex; align-items:center; gap:10px; }
+  .hud-btn {
+    background: rgba(255,255,255,0.3); border:none; border-radius:50%;
+    width:36px; height:36px; font-size:18px; cursor:pointer;
+    transition: background 0.15s, transform 0.12s;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .hud-btn:hover { background:rgba(255,255,255,0.5); transform:scale(1.1); }
+  .hud-btn:active { transform:scale(0.92); }
+  #gameCanvas { display:block; cursor:pointer; touch-action:none; }
+
+  /* Overlay & Modal */
+  .overlay {
+    position:fixed; inset:0; z-index:200;
+    display:flex; align-items:center; justify-content:center;
+    background: rgba(168,237,234,0.45); backdrop-filter: blur(6px);
+  }
+  .modal {
+    background:#fff; border-radius:28px; padding:36px 40px; text-align:center;
+    box-shadow:0 8px 40px rgba(100,80,150,0.18);
+    min-width:300px; max-width:92vw; max-height:90vh; overflow-y:auto;
+  }
+  .modal h1 { font-size:26px; color:#6c4fdb; margin-bottom:8px; }
+  .modal .sub { font-size:14px; color:#888; margin-bottom:20px; }
+  .btn-start {
+    background: linear-gradient(135deg,#a29bfe,#fd79a8); color:#fff; border:none;
+    padding:12px 40px; border-radius:60px; font-size:17px; font-weight:bold; cursor:pointer;
+    box-shadow:0 6px 24px rgba(162,155,254,0.25); transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .btn-start:hover { transform:translateY(-2px); box-shadow:0 10px 32px rgba(162,155,254,0.32); }
+  .btn-ghost {
+    background:rgba(162,155,254,0.1); color:#6c4fdb; border:2px solid rgba(162,155,254,0.3);
+    padding:10px 28px; border-radius:60px; font-size:15px; font-weight:bold; cursor:pointer;
+  }
+  .cat-icon { font-size:64px; margin-bottom:10px; }
+
+  /* 登录界面 */
+  .login-cat-preview { margin:8px auto 14px; display:block; border-radius:50%;
+    background:linear-gradient(135deg,#ffe4ec,#e8d5f5); padding:6px;
+    box-shadow:0 4px 20px rgba(162,155,254,0.2); }
+  .login-input-group { margin:10px 0 4px; text-align:left; }
+  .login-input-group label { font-size:13px; color:#888; display:block; margin-bottom:5px; }
+  .login-input { width:100%; padding:12px 16px; border:2.5px solid #e8e0fa; border-radius:16px;
+    font-size:16px; font-family:inherit; outline:none; color:#5c4db1; background:#faf9ff;
+    transition:border-color 0.2s,box-shadow 0.2s; }
+  .login-input:focus { border-color:#a29bfe; box-shadow:0 0 0 4px rgba(162,155,254,0.15); background:#fff; }
+  .login-input::placeholder { color:#ccc; }
+  .login-error { font-size:12px; color:#e84393; margin-top:5px; min-height:18px; }
+  .login-welcome { font-size:14px; color:#6c4fdb; margin-bottom:6px; font-weight:bold; }
+  .login-welcome .nickname-highlight { color:#fd79a8; font-size:18px; }
+  .login-switch-btn { background:none; border:none; color:#a29bfe; font-size:13px;
+    cursor:pointer; text-decoration:underline; margin-top:8px; padding:0; }
+
+  /* 皮肤面板 */
+  .skin-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:16px 0; }
+  .skin-card { background:#faf9ff; border-radius:16px; padding:10px 4px 6px;
+    cursor:pointer; transition:transform 0.2s,box-shadow 0.2s; border:2.5px solid transparent;
+    text-align:center; position:relative; }
+  .skin-card:hover { transform:translateY(-3px); }
+  .skin-card.selected { border-color:#a29bfe; box-shadow:0 4px 20px rgba(162,155,254,0.18); }
+  .skin-card.locked { opacity:0.45; cursor:not-allowed; }
+  .skin-preview-canvas { display:block; margin:0 auto 4px; border-radius:10px;
+    background:linear-gradient(135deg,#ffe4ec,#e8d5f5); }
+  .skin-name { font-size:12px; color:#6c4fdb; font-weight:bold; }
+  .skin-req { font-size:10px; color:#aaa; margin-top:2px; }
+  .skin-selected-badge { position:absolute; top:4px; right:4px; background:#a29bfe;
+    color:#fff; font-size:10px; width:18px; height:18px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; }
+  .skin-lock-badge { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    font-size:28px; opacity:0.8; }
+  .total-score-tip { font-size:13px; color:#888; margin-bottom:8px; }
+
+  /* 音乐面板 */
+  .music-list { margin:12px 0; }
+  .music-item { display:flex; align-items:center; gap:12px; background:#faf9ff;
+    border-radius:14px; padding:12px 14px; margin-bottom:8px; cursor:pointer;
+    transition:background 0.2s,border 0.2s; border:2px solid transparent; }
+  .music-item:hover { background:#f0ecff; }
+  .music-item.selected { border-color:#a29bfe; background:#f5f0ff; }
+  .music-icon { font-size:26px; width:36px; text-align:center; }
+  .music-title { font-size:14px; font-weight:bold; color:#5c4db1; }
+  .music-desc { font-size:11px; color:#aaa; }
+  .music-check { margin-left:auto; font-size:18px; color:#a29bfe; }
+  .volume-row { display:flex; align-items:center; gap:10px; margin-top:14px;
+    background:#faf9ff; border-radius:14px; padding:12px 14px; }
+  .volume-row label { font-size:13px; color:#6c4db1; }
+  .volume-row input[type=range] { flex:1; accent-color:#a29bfe; height:6px; }
+
+  /* 排行榜 */
+  .rank-list { max-height:320px; overflow-y:auto; margin:10px 0 8px; }
+  .rank-item { display:flex; align-items:center; gap:10px; background:#faf9ff;
+    border-radius:12px; padding:10px 14px; margin-bottom:6px; font-size:14px;
+    transition:background 0.2s; }
+  .rank-item.is-new { background:linear-gradient(135deg,#fff0f6,#f0ecff);
+    border:2px solid #fd79a8; }
+  .rank-num { width:24px; text-align:center; font-weight:bold; color:#bbb; font-size:12px; }
+  .rank-medal { font-size:20px; width:28px; text-align:center; }
+  .rank-score { margin-left:auto; font-weight:bold; color:#fd79a8; font-size:15px; }
+  .rank-new-badge { background:#fd79a8; color:#fff; font-size:10px; padding:2px 8px;
+    border-radius:20px; margin-left:6px; }
+  .rank-my-score { background:linear-gradient(135deg,#a29bfe,#fd79a8); color:#fff;
+    border-radius:16px; padding:14px; margin:10px 0 6px; }
+  .rank-my-score .label { font-size:12px; opacity:0.9; }
+  .rank-my-score .val { font-size:32px; font-weight:bold; }
+  .rank-position-tip { font-size:12px; opacity:0.9; margin-top:3px; }
+  .rank-empty { text-align:center; color:#bbb; padding:20px; font-size:14px; }
+
+  /* 底部按钮栏 */
+  #bottomBar { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    display:none; gap:12px; z-index:150; }
+  .bar-btn { width:48px; height:48px; border-radius:50%; border:none;
+    background:rgba(255,255,255,0.9); box-shadow:0 4px 20px rgba(162,155,254,0.15);
+    font-size:20px; cursor:pointer; transition:transform 0.15s; }
+  .bar-btn:hover { transform:scale(1.1); }
+</style>
+</head>
+<body>
+
+<!-- HUD -->
+<div id="hud" style="display:none;">
+  <div>
+    <div id="score-display">0</div>
+    <div id="player-nick" style="font-size:12px;color:rgba(255,255,255,0.8);"></div>
+  </div>
+  <div id="hint">长按蓄力，松开跳跃</div>
+  <div id="hud-right">
+    <div id="best-display">最高 0</div>
+    <button class="hud-btn" onclick="openMusicPanel()">🎵</button>
+    <button class="hud-btn" onclick="openSkinPanel()">🎨</button>
+  </div>
+</div>
+
+<!-- 能量条 -->
+<div id="power-bar" style="position:fixed;bottom:100px;left:50%;transform:translateX(-50%);width:160px;height:10px;background:rgba(255,255,255,0.3);border-radius:8px;z-index:50;display:none;overflow:hidden;">
+  <div id="power-fill" style="height:100%;width:0%;border-radius:8px;background:linear-gradient(90deg,#a29bfe,#fd79a8);transition:width 0.05s;"></div>
+</div>
+
+<!-- 连击提示 -->
+<div id="combo" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:28px;font-weight:900;color:#fd79a8;text-shadow:0 2px 16px rgba(253,121,152,0.3);z-index:60;pointer-events:none;opacity:0;transition:opacity 0.3s;"></div>
+
+<!-- 登录界面 -->
+<div class="overlay" id="loginScreen">
+  <div class="modal" style="min-width:320px;">
+    <canvas id="loginCatPreview" class="login-cat-preview" width="80" height="90"></canvas>
+    <h1>小猫跳一跳</h1>
+    <div id="registerForm">
+      <p class="sub">创建你的冒险档案吧！</p>
+      <div class="login-input-group">
+        <label>给自己取个名字</label>
+        <input type="text" class="login-input" id="regNickname" placeholder="输入昵称（2~8个字符）" maxlength="8" autocomplete="off">
+        <div class="login-error" id="regError"></div>
+      </div>
+      <button class="btn-start" onclick="doRegister()" style="width:100%;margin-top:10px;">🐱 创建档案</button>
+    </div>
+    <div id="loginForm" style="display:none;">
+      <div class="login-welcome">欢迎回来，<span class="nickname-highlight" id="loginNickname"></span>！</div>
+      <p class="sub" id="loginSubInfo">累计积分：0 · 最高分：0</p>
+      <button class="btn-start" onclick="doLogin()" style="width:100%;margin-top:10px;">🎮 进入游戏</button>
+      <br><button class="login-switch-btn" onclick="switchToRegister()">换个新昵称</button>
+    </div>
+  </div>
+</div>
+
+<!-- 开始界面 -->
+<div class="overlay" id="startScreen" style="display:none;">
+  <div class="modal">
+    <div class="cat-icon">🐱</div>
+    <h1>小猫跳一跳</h1>
+    <p class="sub" id="welcomeText">长按蓄力，松开跳跃<br>落在方块上继续冒险！</p>
+    <button class="btn-start" onclick="startGame()">开始游戏</button>
+    <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;">
+      <button class="bar-btn" style="position:static;transform:none;" onclick="openMusicPanel()">🎵</button>
+      <button class="bar-btn" style="position:static;transform:none;" onclick="openSkinPanel()">🎨</button>
+    </div>
+  </div>
+</div>
+
+<!-- 结束界面 -->
+<div class="overlay" id="endScreen" style="display:none;">
+  <div class="modal">
+    <div class="cat-icon" id="endIcon">😿</div>
+    <h1>游戏结束</h1>
+    <div class="final-score" id="finalScore" style="font-size:56px;font-weight:900;color:#fd79a8;margin:6px 0;">0</div>
+    <div class="best-score" id="bestScoreDisplay" style="font-size:14px;color:#a29bfe;margin-bottom:16px;">最高分：0</div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+      <button class="btn-start" onclick="startGame()">再来一次</button>
+      <button class="btn-ghost" onclick="openRankFromEnd()">🏆 查看排行</button>
+    </div>
+  </div>
+</div>
+
+<!-- 皮肤面板 -->
+<div class="overlay" id="skinPanel" style="display:none;">
+  <div class="modal" style="min-width:340px;">
+    <h1>🎨 选择皮肤</h1>
+    <div class="total-score-tip">历史累计积分：<strong id="totalScoreDisplay">0</strong> 分</div>
+    <div class="skin-grid" id="skinGrid"></div>
+    <button class="btn-start" onclick="closeSkinPanel()">确定</button>
+  </div>
+</div>
+
+<!-- 音乐面板 -->
+<div class="overlay" id="musicPanel" style="display:none;">
+  <div class="modal">
+    <h1>🎵 背景音乐</h1>
+    <p class="sub">选择你喜欢的游戏配乐</p>
+    <div class="volume-row">
+      <label>🔊 音量</label>
+      <input type="range" id="volumeSlider" min="0" max="100" value="60" oninput="setVolume(this.value)">
+      <span id="volumeVal" style="font-size:13px;color:#888;min-width:32px;">60%</span>
+    </div>
+    <div class="music-list" id="musicList"></div>
+    <button class="btn-start" onclick="closeMusicPanel()">确定</button>
+  </div>
+</div>
+
+<!-- 排行榜面板 -->
+<div class="overlay" id="rankPanel" style="display:none;">
+  <div class="modal" style="min-width:320px;">
+    <h1>🏆 排行榜</h1>
+    <p class="sub">本地最佳战绩记录</p>
+    <div class="rank-my-score" id="rankMyScore" style="display:none;">
+      <div class="label">本次得分</div>
+      <div class="val" id="rankMyScoreVal">0</div>
+      <div class="rank-position-tip" id="rankPosTip"></div>
+    </div>
+    <div class="rank-list" id="rankList"></div>
+    <button class="btn-start" onclick="closeRankPanel()">关闭</button>
+  </div>
+</div>
+
+<!-- 底部按钮 -->
+<div id="bottomBar">
+  <button class="bar-btn" onclick="openMusicPanel()">🎵</button>
+  <button class="bar-btn" onclick="openSkinPanel()">🎨</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+/* ============================================================
+   小猫跳一跳 — 完整修复版（含注册/登录/皮肤/音乐/排行榜）
+   ============================================================ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ------- 物理常量 -------
+const GRAVITY    = 0.55;
+const MAX_POWER  = 22;
+const POWER_RATE = 0.22;
+const CAT_W      = 36;
+const CAT_H      = 42;
+const PLATFORM_H = 32;
+const CAM_LERP   = 0.08;
+const COMBO_Y    = -28;
+
+// ------- 状态 -------
+let state      = 'idle';
+let score      = 0;
+let bestScore  = 0;
+let power      = 0;
+let pressing   = false;
+
+// ------- 世界实体 -------
+let platforms    = [];
+let catX = 0, catY = 0, catVX = 0, catVY = 0;
+let catOnPlatIdx = 0;
+let cameraX = 0, cameraY = 0;
+let targetCamX = 0, targetCamY = 0;
+let combo    = 0;
+let comboAnim = [];
+let catRotation = 0;
+let landAnim    = 0;
+
+const PLAT_COLORS = [
+  ['#a29bfe','#6c5ce7'], ['#fd79a8','#e84393'],
+  ['#55efc4','#00b894'], ['#fdcb6e','#e17055'],
+  ['#74b9ff','#0984e3'], ['#fab1a0','#e17055'],
+];
+
+// ============================================================
+//  皮肤系统
+// ============================================================
+const SKINS = [
+  { id:'pink',  name:'樱花猫',  unlock:0,   body:'#ffb8c8', belly:'#ffe4ec', ear:'#ff8fab', eye:'#5c3d2e', nose:'#ff8fab', tail:'#ffb8c8',  desc:'默认解锁' },
+  { id:'blue',  name:'蓝莓猫',  unlock:10,  body:'#b2d8ff', belly:'#dff0ff', ear:'#7ab8f5', eye:'#2c4a6e', nose:'#7ab8f5', tail:'#b2d8ff',  desc:'累计10分解锁' },
+  { id:'mint',  name:'抹茶猫',  unlock:25,  body:'#a8e6cf', belly:'#dcf5eb', ear:'#5ecb98', eye:'#1e5944', nose:'#5ecb98', tail:'#a8e6cf',  desc:'累计25分解锁' },
+  { id:'purple',name:'薰衣草猫',unlock:50,  body:'#c9b8f0', belly:'#e8dfff', ear:'#9d84e0', eye:'#3d256e', nose:'#9d84e0', tail:'#c9b8f0',  desc:'累计50分解锁' },
+  { id:'gold',  name:'黄金猫',  unlock:100, body:'#ffd97d', belly:'#fff3cc', ear:'#f5a623', eye:'#5c3c00', nose:'#f5a623', tail:'#ffd97d',  desc:'累计100分解锁' },
+  { id:'dark',  name:'暗夜猫',  unlock:200, body:'#8e8e9e', belly:'#c8c8d8', ear:'#666680', eye:'#e0c0ff', nose:'#b0a0d0', tail:'#8e8e9e',  desc:'累计200分解锁' },
+];
+
+// ------- 玩家数据 -------
+let playerData   = null;
+let playerNick   = '';
+let totalScore   = 0;
+let currentSkin  = 'pink';
+let rankData     = [];
+
+// 从 localStorage 加载
+function loadPlayerData() {
+  try {
+    const raw = localStorage.getItem('cjt_player');
+    if (raw) {
+      playerData = JSON.parse(raw);
+      playerNick  = playerData.nickname || '';
+      totalScore  = playerData.totalScore || 0;
+      bestScore   = playerData.highScore || 0;
+      currentSkin = playerData.selectedSkin || 'pink';
+      rankData    = playerData.leaderboard || [];
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+function saveData() {
+  playerData = {
+    nickname: playerNick,
+    totalScore: totalScore,
+    highScore: bestScore,
+    selectedSkin: currentSkin,
+    musicChoice: currentBgm,
+    volume: bgmVolume,
+    leaderboard: rankData
+  };
+  localStorage.setItem('cjt_player', JSON.stringify(playerData));
+}
+
+function getSkin() {
+  return SKINS.find(s => s.id === currentSkin) || SKINS[0];
+}
+
+// ============================================================
+//  注册 / 登录
+// ============================================================
+function initLoginScreen() {
+  const pc = document.getElementById('loginCatPreview');
+  const pctx = pc.getContext('2d');
+  pctx.clearRect(0, 0, 80, 90);
+  drawCatOnCtx(pctx, 40, 80, 'idle', getSkin(), 1.0);
+
+  if (loadPlayerData() && playerNick) {
+    document.getElementById('registerForm').style.display = 'none';
+    document.getElementById('loginForm').style.display = 'block';
+    document.getElementById('loginNickname').textContent = playerNick;
+    document.getElementById('loginSubInfo').textContent =
+      '累计积分：' + totalScore + ' · 最高分：' + bestScore;
+  } else {
+    document.getElementById('registerForm').style.display = 'block';
+    document.getElementById('loginForm').style.display = 'none';
+  }
+}
+
+function doRegister() {
+  const input = document.getElementById('regNickname');
+  const error = document.getElementById('regError');
+  const nick = input.value.trim();
+  if (nick.length < 2) { error.textContent = '昵称至少需要2个字符哦～'; input.focus(); return; }
+  if (nick.length > 8) { error.textContent = '昵称最多8个字符～'; input.focus(); return; }
+
+  playerNick = nick;
+  totalScore = 0;
+  bestScore = 0;
+  currentSkin = 'pink';
+  rankData = [];
+  saveData();
+
+  document.getElementById('registerForm').style.display = 'none';
+  document.getElementById('loginForm').style.display = 'block';
+  document.getElementById('loginNickname').textContent = nick;
+  document.getElementById('loginSubInfo').textContent = '累计积分：0 · 最高分：0';
+  error.textContent = '';
+}
+
+function doLogin() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('hud').style.display = 'flex';
+  document.getElementById('welcomeText').innerHTML =
+    '<span style="color:#6c4fdb;">' + playerNick + '</span>，准备好了吗？<br>长按蓄力，松开跳跃！';
+  document.getElementById('startScreen').style.display = 'flex';
+  document.getElementById('player-nick').textContent = playerNick;
+  document.getElementById('best-display').textContent = '最高 ' + bestScore;
+}
+
+function switchToRegister() {
+  document.getElementById('registerForm').style.display = 'block';
+  document.getElementById('loginForm').style.display = 'none';
+  document.getElementById('regNickname').value = '';
+  document.getElementById('regError').textContent = '';
+}
+
+// 回车注册
+document.getElementById('regNickname').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doRegister();
+});
+
+// ============================================================
+//  背景音乐（Web Audio API）
+// ============================================================
+let audioCtx   = null;
+let bgmNodes   = [];
+let bgmGain    = null;
+let currentBgm = 'cute';
+let bgmVolume  = 0.6;
+let bgmPlaying = false;
+
+const BGM_LIST = [
+  { id:'none',  name:'静音模式', desc:'不播放背景音乐', icon:'🔇', notes:[], tempo:0 },
+  { id:'cute',  name:'可爱叮咚', desc:'轻快的木琴风格小曲', icon:'🎹',
+    notes:[[523,0.12],[659,0.12],[784,0.12],[1047,0.25],[784,0.12],[659,0.12],[523,0.25],[659,0.12],[523,0.12],[392,0.12],[523,0.25],[392,0.12],[330,0.12],[262,0.12],[392,0.25]], tempo:0.18 },
+  { id:'bubbly',name:'泡泡进行曲',desc:'活泼欢快的弹跳节拍', icon:'🫧',
+    notes:[[523,0.1],[523,0.1],[659,0.15],[523,0.1],[784,0.2],[0,0.1],[698,0.1],[698,0.1],[784,0.15],[698,0.1],[587,0.25],[0,0.1]], tempo:0.16 },
+  { id:'dreamy', name:'梦幻星空', desc:'柔和的氛围音乐', icon:'✨',
+    notes:[[262,0.4],[330,0.4],[392,0.4],[523,0.6],[330,0.4],[392,0.4],[494,0.4],[392,0.6]], tempo:0.5 },
+  { id:'retro',  name:'复古8-bit', desc:'经典游戏机风格', icon:'👾',
+    notes:[[523,0.1],[587,0.1],[659,0.1],[698,0.1],[784,0.1],[0,0.05],[784,0.1],[0,0.05],[698,0.1],[659,0.1],[587,0.1],[523,0.2],[392,0.1],[440,0.1],[494,0.1],[523,0.2]], tempo:0.13 },
+];
+
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    bgmGain  = audioCtx.createGain();
+    bgmGain.gain.value = bgmVolume;
+    bgmGain.connect(audioCtx.destination);
+  }
+}
+
+function stopBgm() {
+  bgmNodes.forEach(function(n) { try { n.stop(); } catch(e){} });
+  bgmNodes = [];
+  bgmPlaying = false;
+}
+
+function playBgm() {
+  if (!audioCtx) return;
+  stopBgm();
+  var bgm = BGM_LIST.find(function(b) { return b.id === currentBgm; });
+  if (!bgm || !bgm.notes || bgm.notes.length === 0) return;
+  bgmPlaying = true;
+  var startTime = audioCtx.currentTime + 0.05;
+
+  function scheduleBgmLoop() {
+    if (!bgmPlaying) return;
+    var t = startTime;
+    bgm.notes.forEach(function(n) {
+      var freq = n[0], dur = n[1];
+      if (freq > 0) {
+        var osc  = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = bgm.id === 'retro' ? 'square' : 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.001, t);
+        gain.gain.linearRampToValueAtTime(0.22, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + dur * bgm.tempo * 0.9);
+        osc.connect(gain);
+        gain.connect(bgmGain);
+        osc.start(t);
+        osc.stop(t + dur * bgm.tempo);
+        bgmNodes.push(osc);
+      }
+      t += dur * bgm.tempo;
+    });
+    startTime = t + 0.1;
+    var totalDur = bgm.notes.reduce(function(s,n) { return s + n[1] * bgm.tempo; }, 0);
+    setTimeout(scheduleBgmLoop, (totalDur + 0.1) * 1000);
+  }
+  scheduleBgmLoop();
+}
+
+function setVolume(val) {
+  bgmVolume = val / 100;
+  if (bgmGain) bgmGain.gain.value = bgmVolume;
+  document.getElementById('volumeVal').textContent = val + '%';
+  localStorage.setItem('cjt_vol', bgmVolume);
+}
+
+// ============================================================
+//  音效
+// ============================================================
+function playSfx(type) {
+  if (!audioCtx) return;
+  var osc  = audioCtx.createOscillator();
+  var gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(bgmGain);
+  var t = audioCtx.currentTime;
+  if (type === 'jump') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(400, t);
+    osc.frequency.exponentialRampToValueAtTime(800, t + 0.12);
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    osc.start(t); osc.stop(t + 0.15);
+  } else if (type === 'land') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(600, t);
+    osc.frequency.exponentialRampToValueAtTime(300, t + 0.1);
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    osc.start(t); osc.stop(t + 0.12);
+  } else if (type === 'die') {
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(300, t);
+    osc.frequency.exponentialRampToValueAtTime(80, t + 0.4);
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    osc.start(t); osc.stop(t + 0.4);
+  }
+}
+
+// ============================================================
+//  排行榜
+// ============================================================
+function addRankRecord(s) {
+  var now  = new Date();
+  var date = (now.getMonth()+1) + '/' + now.getDate() + ' ' + now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
+  rankData.push({ score:s, date:date, nickname:playerNick });
+  rankData.sort(function(a,b) { return b.score - a.score; });
+  if (rankData.length > 10) rankData = rankData.slice(0, 10);
+  saveData();
+}
+
+function getRankPosition(s) {
+  var pos = rankData.findIndex(function(r) { return r.score <= s; });
+  return pos === -1 ? rankData.length + 1 : pos + 1;
+}
+
+function renderRankList(currentGameScore) {
+  var list = document.getElementById('rankList');
+  if (rankData.length === 0) {
+    list.innerHTML = '<div class="rank-empty">还没有记录，快去创造第一个！</div>';
+    return;
+  }
+  var medals = ['🥇','🥈','🥉'];
+  list.innerHTML = rankData.map(function(r, i) {
+    var isNew = currentGameScore !== null && r.score === currentGameScore
+                  && i === rankData.findIndex(function(x) { return x.score === currentGameScore; });
+    var nick = r.nickname || '匿名小猫';
+    return '<div class="rank-item rank-' + (i+1) + (isNew ? ' is-new' : '') + '">' +
+      '<div class="rank-num">' + (i < 3 ? '' : i+1) + '</div>' +
+      '<div class="rank-medal">' + (medals[i] || '🐾') + '</div>' +
+      '<div style="flex:1;text-align:left;">' +
+        '<div style="font-size:13px;color:#6c4fdb;font-weight:bold;">' + nick + '</div>' +
+        '<span style="font-size:11px;color:#aaa;">' + r.date + '</span>' +
+        (isNew ? '<span class="rank-new-badge">本次</span>' : '') +
+      '</div>' +
+      '<div class="rank-score">' + r.score + '</div></div>';
+  }).join('');
+}
+
+// ============================================================
+//  面板开关
+// ============================================================
+function openSkinPanel() {
+  document.getElementById('totalScoreDisplay').textContent = totalScore;
+  renderSkinGrid();
+  document.getElementById('skinPanel').style.display = 'flex';
+}
+function closeSkinPanel() { document.getElementById('skinPanel').style.display = 'none'; }
+
+function openMusicPanel() {
+  renderMusicList();
+  document.getElementById('volumeSlider').value = bgmVolume * 100;
+  document.getElementById('volumeVal').textContent = Math.round(bgmVolume * 100) + '%';
+  document.getElementById('musicPanel').style.display = 'flex';
+}
+function closeMusicPanel() { document.getElementById('musicPanel').style.display = 'none'; }
+
+function openRankPanel(currentGameScore) {
+  var myBlock = document.getElementById('rankMyScore');
+  if (currentGameScore !== null) {
+    myBlock.style.display = 'block';
+    document.getElementById('rankMyScoreVal').textContent = currentGameScore;
+    var pos = getRankPosition(currentGameScore);
+    var tips = pos === 1 ? '🎉 新的最高分！' : '排名第 ' + pos + ' 位';
+    document.getElementById('rankPosTip').textContent = tips;
+  } else {
+    myBlock.style.display = 'none';
+  }
+  renderRankList(currentGameScore);
+  document.getElementById('rankPanel').style.display = 'flex';
+}
+function closeRankPanel() { document.getElementById('rankPanel').style.display = 'none'; }
+
+function openRankFromEnd() {
+  document.getElementById('endScreen').style.display = 'none';
+  openRankPanel(score);
+}
+
+// ============================================================
+//  皮肤 Grid
+// ============================================================
+function renderSkinGrid() {
+  var grid = document.getElementById('skinGrid');
+  grid.innerHTML = '';
+  SKINS.forEach(function(skin) {
+    var unlocked = totalScore >= skin.unlock;
+    var selected = currentSkin === skin.id;
+    var card = document.createElement('div');
+    card.className = 'skin-card' + (selected ? ' selected' : '') + (!unlocked ? ' locked' : '');
+    card.onclick = function() {
+      if (!unlocked) return;
+      currentSkin = skin.id;
+      saveData();
+      renderSkinGrid();
+    };
+    var pc = document.createElement('canvas');
+    pc.width  = 56; pc.height = 64;
+    pc.className = 'skin-preview-canvas';
+    drawCatOnCtx(pc.getContext('2d'), 28, 58, 'idle', skin, 0.9);
+    card.innerHTML =
+      '<div class="skin-name">' + skin.name + '</div>' +
+      '<div class="skin-req">' + skin.desc + '</div>' +
+      (selected ? '<div class="skin-selected-badge">✓</div>' : '') +
+      (!unlocked ? '<div class="skin-lock-badge">🔒</div>' : '');
+    card.insertBefore(pc, card.firstChild);
+    grid.appendChild(card);
+  });
+}
+
+// ============================================================
+//  音乐列表
+// ============================================================
+function renderMusicList() {
+  var list = document.getElementById('musicList');
+  list.innerHTML = BGM_LIST.map(function(b) {
+    return '<div class="music-item ' + (currentBgm === b.id ? 'selected' : '') + '" onclick="selectBgm(\'' + b.id + '\')">' +
+      '<div class="music-icon">' + b.icon + '</div>' +
+      '<div class="music-info"><div class="music-title">' + b.name + '</div><div class="music-desc">' + b.desc + '</div></div>' +
+      '<div class="music-check">' + (currentBgm === b.id ? '♪' : '') + '</div></div>';
+  }).join('');
+}
+
+function selectBgm(id) {
+  currentBgm = id;
+  localStorage.setItem('cjt_bgm', id);
+  initAudio();
+  if (state !== 'dead' && state !== 'idle') { playBgm(); }
+  else if (state === 'idle') { playBgm(); }
+  renderMusicList();
+}
+
+// ============================================================
+//  平台生成
+// ============================================================
+function makePlatform(x) {
+  var w = 80 + Math.random() * 80;
+  var color = PLAT_COLORS[Math.floor(Math.random() * PLAT_COLORS.length)];
+  var baseY = canvas.height * 0.6;
+  var y = baseY + (Math.random() - 0.3) * 120;
+  return { x:x, y:y, w:w, h:PLATFORM_H, color:color, scored:false };
+}
+
+function initPlatforms() {
+  platforms = [];
+  var firstW = 160;
+  var first = { x:canvas.width/2 - firstW/2, y:canvas.height*0.62, w:firstW, h:PLATFORM_H, color:PLAT_COLORS[0], scored:false };
+  platforms.push(first);
+  var lastX = first.x + first.w;
+  for (var i = 0; i < 6; i++) {
+    var gap = 80 + Math.random() * 100;
+    platforms.push(makePlatform(lastX + gap));
+    lastX = platforms[platforms.length-1].x + platforms[platforms.length-1].w;
+  }
+}
+
+function ensurePlatforms() {
+  var last = platforms[platforms.length - 1];
+  if (last.x - cameraX < canvas.width + 200) {
+    var gap = 90 + Math.random() * 110;
+    platforms.push(makePlatform(last.x + last.w + gap));
+  }
+  while (platforms.length > 30 && platforms[0].x + platforms[0].w < cameraX - 400) {
+    platforms.shift();
+    catOnPlatIdx--;
+    if (catOnPlatIdx < 0) catOnPlatIdx = 0;
+  }
+}
+
+// ============================================================
+//  游戏初始化
+// ============================================================
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('endScreen').style.display = 'none';
+
+  score = 0; combo = 0; comboAnim = [];
+  power = 0; pressing = false;
+  catRotation = 0; landAnim = 0;
+
+  resize();
+  initPlatforms();
+
+  var p0 = platforms[0];
+  catX = p0.x + p0.w / 2;
+  catY = p0.y;
+  catVX = 0; catVY = 0;
+  catOnPlatIdx = 0;
+  cameraX = catX - canvas.width / 2;
+  cameraY = catY - canvas.height / 2;
+  targetCamX = cameraX;
+  targetCamY = cameraY;
+
+  updateScore();
+  state = 'idle';
+
+  initAudio();
+  playBgm();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ============================================================
+//  输入
+// ============================================================
+function onPressStart(e) {
+  e.preventDefault();
+  if (state !== 'idle') return;
+  pressing = true;
+  power    = 0;
+  state    = 'charging';
+}
+function onPressEnd(e) {
+  e.preventDefault();
+  if (state !== 'charging') return;
+  pressing = false;
+  doJump();
+}
+canvas.addEventListener('mousedown',  onPressStart);
+canvas.addEventListener('mouseup',    onPressEnd);
+canvas.addEventListener('touchstart', onPressStart, { passive:false });
+canvas.addEventListener('touchend',   onPressEnd,   { passive:false });
+
+// ============================================================
+//  跳跃
+// ============================================================
+function doJump() {
+  if (state !== 'charging') return;
+  var nextPlat = platforms[catOnPlatIdx + 1];
+  if (!nextPlat) return;
+  var dx  = (nextPlat.x + nextPlat.w / 2) - catX;
+  var dir = dx > 0 ? 1 : -1;
+  catVX = dir * power;
+  catVY = -power * 1.1;
+  catRotation = 0;
+  state = 'flying';
+  playSfx('jump');
+}
+
+// ============================================================
+//  碰撞检测
+// ============================================================
+function checkLanding() {
+  if (catVY <= 0) return;
+  for (var i = 0; i < platforms.length; i++) {
+    var p = platforms[i];
+    var halfW = CAT_W / 2;
+    var inX = catX - halfW < p.x + p.w && catX + halfW > p.x;
+    var inY = catY >= p.y - 4 && catY <= p.y + 12;
+    if (inX && inY) {
+      catY = p.y; catVX = 0; catVY = 0;
+      catRotation = 0; landAnim = 1;
+      state = 'idle';
+      catOnPlatIdx = i;
+      playSfx('land');
+      if (!p.scored) {
+        p.scored = true;
+        score++; combo++;
+        totalScore++;
+        updateScore();
+        spawnCombo(catX, catY);
+        saveData();
+      }
+      ensurePlatforms();
+      return;
+    }
+  }
+}
+
+function checkDead() {
+  if (catY - cameraY > canvas.height + 100) gameover();
+  if (catX < cameraX - 300 || catX > cameraX + canvas.width + 300) gameover();
+}
+
+function gameover() {
+  state = 'dead';
+  playSfx('die');
+  stopBgm();
+  if (score > bestScore) bestScore = score;
+  addRankRecord(score);
+  saveData();
+
+  document.getElementById('finalScore').textContent    = score;
+  document.getElementById('bestScoreDisplay').textContent = '最高分：' + bestScore;
+  document.getElementById('best-display').textContent  = '最高 ' + bestScore;
+  document.getElementById('endIcon').textContent = score >= 20 ? '😸' : score >= 10 ? '😺' : '😿';
+  document.getElementById('endScreen').style.display = 'flex';
+}
+
+function updateScore() {
+  document.getElementById('score-display').textContent = score;
+  document.getElementById('best-display').textContent  = '最高 ' + Math.max(score, bestScore);
+}
+
+// ============================================================
+//  连击动画
+// ============================================================
+function spawnCombo(x, y) {
+  var text = combo >= 5 ? '超级连击×' + combo : combo >= 3 ? '连击×' + combo : '+1';
+  comboAnim.push({ x:x, y:y+COMBO_Y, text:text, alpha:1, vy:-1.5 });
+}
+
+function drawComboAnim() {
+  comboAnim = comboAnim.filter(function(c) { return c.alpha > 0; });
+  comboAnim.forEach(function(c) {
+    var sx = c.x - cameraX;
+    var sy = c.y - cameraY;
+    ctx.save();
+    ctx.globalAlpha = c.alpha;
+    ctx.font = 'bold ' + (combo >= 5 ? 22 : 18) + 'px Arial Rounded MT Bold, Arial';
+    ctx.fillStyle = combo >= 5 ? '#e84393' : '#6c5ce7';
+    ctx.textAlign = 'center';
+    ctx.fillText(c.text, sx, sy);
+    ctx.restore();
+    c.y  += c.vy;
+    c.vy *= 0.96;
+    c.alpha -= 0.018;
+  });
+}
+
+// ============================================================
+//  镜头
+// ============================================================
+function updateCamera() {
+  targetCamX = catX - canvas.width * 0.38;
+  targetCamY = catY - canvas.height * 0.52;
+  cameraX += (targetCamX - cameraX) * CAM_LERP;
+  cameraY += (targetCamY - cameraY) * CAM_LERP;
+}
+
+// ============================================================
+//  背景
+// ============================================================
+var cloudSeeds = [];
+function initClouds() {
+  for (var i = 0; i < 12; i++) {
+    cloudSeeds.push({
+      worldX: Math.random() * 4000 - 1000,
+      worldY: Math.random() * 300 - 50,
+      size: 0.6 + Math.random() * 0.8,
+      speed: 0.1 + Math.random() * 0.1
+    });
+  }
+}
+initClouds();
+
+function drawBackground() {
+  var grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0,   '#c4e3ff');
+  grad.addColorStop(0.5, '#e8d5f5');
+  grad.addColorStop(1,   '#ffd6e0');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  cloudSeeds.forEach(function(c) {
+    var sx = c.worldX - cameraX * c.speed;
+    var sy = c.worldY - cameraY * 0.05;
+    var screenX = ((sx % (canvas.width + 400)) + (canvas.width + 400)) % (canvas.width + 400) - 200;
+    drawCloud(screenX, sy, c.size);
+  });
+}
+
+function drawCloud(x, y, s) {
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.beginPath();
+  ctx.arc(x,      y,      28*s, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x+30*s, y-10*s, 22*s, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x+58*s, y,      26*s, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x+20*s, y+10*s, 20*s, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x+44*s, y+10*s, 18*s, 0, Math.PI*2); ctx.fill();
+}
+
+// ============================================================
+//  平台绘制
+// ============================================================
+function drawPlatforms() {
+  platforms.forEach(function(p, idx) {
+    var sx = p.x - cameraX;
+    var sy = p.y - cameraY;
+    if (sx + p.w < -50 || sx > canvas.width + 50) return;
+
+    // 阴影
+    ctx.fillStyle = 'rgba(0,0,0,0.10)';
+    ctx.beginPath();
+    ctx.ellipse(sx + p.w/2, sy + p.h + 6, p.w/2 - 4, 6, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // 平台主体
+    var r = 12;
+    ctx.fillStyle = p.color[0];
+    ctx.beginPath();
+    ctx.moveTo(sx+r, sy); ctx.lineTo(sx+p.w-r, sy);
+    ctx.arcTo(sx+p.w, sy, sx+p.w, sy+r, r);
+    ctx.lineTo(sx+p.w, sy+p.h-r);
+    ctx.arcTo(sx+p.w, sy+p.h, sx+p.w-r, sy+p.h, r);
+    ctx.lineTo(sx+r, sy+p.h);
+    ctx.arcTo(sx, sy+p.h, sx, sy+p.h-r, r);
+    ctx.lineTo(sx, sy+r);
+    ctx.arcTo(sx, sy, sx+r, sy, r);
+    ctx.closePath();
+    ctx.fill();
+
+    // 高光
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.beginPath();
+    ctx.moveTo(sx+r, sy); ctx.lineTo(sx+p.w-r, sy);
+    ctx.arcTo(sx+p.w, sy, sx+p.w, sy+r, r);
+    ctx.lineTo(sx+p.w, sy+10);
+    ctx.lineTo(sx, sy+10);
+    ctx.lineTo(sx, sy+r);
+    ctx.arcTo(sx, sy, sx+r, sy, r);
+    ctx.closePath();
+    ctx.fill();
+
+    // 当前站在的平台标记
+    if (idx === catOnPlatIdx) {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.beginPath();
+      ctx.arc(sx + p.w/2, sy + p.h/2, 6, 0, Math.PI*2);
+      ctx.fill();
+    }
+  });
+}
+
+// ============================================================
+//  小猫绘制（通用）
+// ============================================================
+function drawCatOnCtx(c, cx, cy, gameState, skin, scale) {
+  c.save();
+  c.translate(cx, cy);
+  c.scale(scale || 1, scale || 1);
+  var bw = CAT_W, bh = CAT_H;
+
+  // 身体
+  c.fillStyle = skin.body;
+  c.beginPath(); c.ellipse(0, -bh*0.3, bw*0.42, bh*0.38, 0, 0, Math.PI*2); c.fill();
+  // 肚皮
+  c.fillStyle = skin.belly;
+  c.beginPath(); c.ellipse(0, -bh*0.25, bw*0.26, bh*0.24, 0, 0, Math.PI*2); c.fill();
+  // 头
+  c.fillStyle = skin.body;
+  c.beginPath(); c.arc(0, -bh*0.72, bw*0.38, 0, Math.PI*2); c.fill();
+  // 左耳
+  c.fillStyle = skin.body;
+  c.beginPath(); c.moveTo(-bw*0.28,-bh*0.9); c.lineTo(-bw*0.42,-bh*1.18); c.lineTo(-bw*0.10,-bh*0.98); c.closePath(); c.fill();
+  c.fillStyle = skin.ear;
+  c.beginPath(); c.moveTo(-bw*0.26,-bh*0.93); c.lineTo(-bw*0.38,-bh*1.10); c.lineTo(-bw*0.14,-bh*1.00); c.closePath(); c.fill();
+  // 右耳
+  c.fillStyle = skin.body;
+  c.beginPath(); c.moveTo(bw*0.28,-bh*0.9); c.lineTo(bw*0.42,-bh*1.18); c.lineTo(bw*0.10,-bh*0.98); c.closePath(); c.fill();
+  c.fillStyle = skin.ear;
+  c.beginPath(); c.moveTo(bw*0.26,-bh*0.93); c.lineTo(bw*0.38,-bh*1.10); c.lineTo(bw*0.14,-bh*1.00); c.closePath(); c.fill();
+  // 白眼球
+  c.fillStyle = '#fff';
+  c.beginPath(); c.ellipse(-bw*0.13,-bh*0.74,7,8,0,0,Math.PI*2); c.fill();
+  c.beginPath(); c.ellipse( bw*0.13,-bh*0.74,7,8,0,0,Math.PI*2); c.fill();
+  // 眼睛
+  if (gameState === 'charging') {
+    c.strokeStyle = skin.eye; c.lineWidth = 2.5; c.lineCap = 'round';
+    c.beginPath(); c.arc(-bw*0.13,-bh*0.74,4,0.2,Math.PI-0.2,false); c.stroke();
+    c.beginPath(); c.arc( bw*0.13,-bh*0.74,4,0.2,Math.PI-0.2,false); c.stroke();
+  } else {
+    c.fillStyle = skin.eye;
+    c.beginPath(); c.arc(-bw*0.13,-bh*0.74,4.5,0,Math.PI*2); c.fill();
+    c.beginPath(); c.arc( bw*0.13,-bh*0.74,4.5,0,Math.PI*2); c.fill();
+    c.fillStyle = '#fff';
+    c.beginPath(); c.arc(-bw*0.10,-bh*0.77,1.6,0,Math.PI*2); c.fill();
+    c.beginPath(); c.arc( bw*0.16,-bh*0.77,1.6,0,Math.PI*2); c.fill();
+  }
+  // 鼻子
+  c.fillStyle = skin.nose;
+  c.beginPath(); c.arc(0,-bh*0.64,3,0,Math.PI*2); c.fill();
+  // 嘴
+  c.strokeStyle = skin.ear; c.lineWidth = 1.8; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(-5,-bh*0.60); c.quadraticCurveTo(0,-bh*0.54,5,-bh*0.60); c.stroke();
+  // 胡须
+  c.strokeStyle = skin.ear + '99'; c.lineWidth = 1.2;
+  c.beginPath(); c.moveTo(-bw*0.12,-bh*0.63); c.lineTo(-bw*0.42,-bh*0.67); c.stroke();
+  c.beginPath(); c.moveTo(-bw*0.12,-bh*0.62); c.lineTo(-bw*0.40,-bh*0.58); c.stroke();
+  c.beginPath(); c.moveTo( bw*0.12,-bh*0.63); c.lineTo( bw*0.42,-bh*0.67); c.stroke();
+  c.beginPath(); c.moveTo( bw*0.12,-bh*0.62); c.lineTo( bw*0.40,-bh*0.58); c.stroke();
+  // 尾巴
+  c.strokeStyle = skin.tail; c.lineWidth = 5; c.lineCap = 'round';
+  var tailCurve = gameState === 'flying' ? 0.4 : 0.2;
+  c.beginPath(); c.moveTo(bw*0.35,-bh*0.18); c.quadraticCurveTo(bw*0.7,-bh*0.1,bw*0.55,-bh*(0.45+tailCurve)); c.stroke();
+  // 爪子
+  c.fillStyle = skin.body;
+  if (gameState === 'flying') {
+    c.beginPath(); c.ellipse(-bw*0.38,-bh*0.15,7,5,-0.4,0,Math.PI*2); c.fill();
+    c.beginPath(); c.ellipse( bw*0.38,-bh*0.15,7,5, 0.4,0,Math.PI*2); c.fill();
+  } else {
+    c.beginPath(); c.ellipse(-bw*0.28,-bh*0.02,7,5,0,0,Math.PI*2); c.fill();
+    c.beginPath(); c.ellipse( bw*0.28,-bh*0.02,7,5,0,0,Math.PI*2); c.fill();
+  }
+  c.restore();
+}
+
+// ============================================================
+//  主游戏绘制
+// ============================================================
+function drawCat(worldX, worldY) {
+  var sx = worldX - cameraX;
+  var sy = worldY - cameraY;
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  var scaleX = 1, scaleY = 1;
+  if (landAnim > 0) {
+    scaleX = 1 + landAnim * 0.25;
+    scaleY = 1 - landAnim * 0.22;
+    landAnim -= 0.06;
+    if (landAnim < 0) landAnim = 0;
+  }
+  if (state === 'charging') {
+    var ratio = power / MAX_POWER;
+    scaleX = 1 + ratio * 0.3;
+    scaleY = 1 - ratio * 0.28;
+  }
+  if (state === 'flying') {
+    catRotation += 0.12;
+    ctx.rotate(catRotation);
+  }
+  ctx.scale(scaleX, scaleY);
+  drawCatOnCtx(ctx, 0, 0, state, getSkin(), 1.0);
+  ctx.restore();
+
+  // 蓄力能量条
+  if (state === 'charging') {
+    var barW = 50, barH = 6, barY = sy + 10;
+    var ratio = power / MAX_POWER;
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath();
+    ctx.roundRect(sx - barW/2, barY, barW, barH, 3);
+    ctx.fill();
+    var barGrad = ctx.createLinearGradient(sx - barW/2, 0, sx + barW/2, 0);
+    barGrad.addColorStop(0, '#a29bfe');
+    barGrad.addColorStop(1, '#fd79a8');
+    ctx.fillStyle = barGrad;
+    ctx.beginPath();
+    ctx.roundRect(sx - barW/2, barY, barW * ratio, barH, 3);
+    ctx.fill();
+  }
+}
+
+// ============================================================
+//  主循环
+// ============================================================
+function gameLoop() {
+  if (state === 'dead') return;
+
+  if (state === 'charging' && pressing) {
+    power = Math.min(power + POWER_RATE, MAX_POWER);
+  }
+  if (state === 'flying') {
+    catVY += GRAVITY;
+    catX  += catVX;
+    catY  += catVY;
+    checkLanding();
+    checkDead();
+  }
+  updateCamera();
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBackground();
+  drawPlatforms();
+  drawCat(catX, catY);
+  drawComboAnim();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ============================================================
+//  初始化
+// ============================================================
+loadPlayerData();
+initLoginScreen();
+</script>
+</body>
+</html>
